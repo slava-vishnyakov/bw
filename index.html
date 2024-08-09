@@ -18,8 +18,9 @@
             <input type="file" id="file-input" class="hidden">
         </div>
 
-        <div class="mt-4">
-            <img id="preview-image" class="hidden max-w-full rounded-lg" alt="Uploaded Image">
+        <div class="mt-4 relative">
+            <canvas id="image-canvas" class="hidden max-w-full rounded-lg"></canvas>
+            <div id="crop-overlay" class="hidden absolute top-0 left-0 border-2 border-white pointer-events-none"></div>
         </div>
 
         <div id="controls" class="mt-4 hidden">
@@ -30,36 +31,42 @@
             <input type="range" id="contrast-slider" min="0" max="500" value="100" class="w-full">
         </div>
 
-        <button id="download-btn" class="hidden mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg">Download Image</button>
+        <div class="mt-4 flex justify-between">
+            <button id="reset-crop-btn" class="hidden bg-gray-500 text-white px-4 py-2 rounded-lg">Reset Crop</button>
+            <button id="download-btn" class="hidden bg-blue-500 text-white px-4 py-2 rounded-lg">Download Image</button>
+        </div>
     </div>
 
     <script>
         const dropArea = document.getElementById('drop-area');
         const fileInput = document.getElementById('file-input');
-        const previewImage = document.getElementById('preview-image');
+        const imageCanvas = document.getElementById('image-canvas');
+        const cropOverlay = document.getElementById('crop-overlay');
         const controls = document.getElementById('controls');
         const brightnessSlider = document.getElementById('brightness-slider');
         const brightnessValue = document.getElementById('brightness-value');
         const contrastSlider = document.getElementById('contrast-slider');
         const contrastValue = document.getElementById('contrast-value');
         const downloadBtn = document.getElementById('download-btn');
+        const resetCropBtn = document.getElementById('reset-crop-btn');
         let originalImage;
-        let imageCanvas;
         let imageCtx;
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let isDragging = false;
+        let startX, startY;
+        let cropX = 0, cropY = 0, cropWidth = 0, cropHeight = 0;
 
         dropArea.addEventListener('click', () => fileInput.click());
-
         fileInput.addEventListener('change', handleFile);
-
         dropArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropArea.classList.add('border-blue-500');
         });
-
         dropArea.addEventListener('dragleave', () => {
             dropArea.classList.remove('border-blue-500');
         });
-
         dropArea.addEventListener('drop', (e) => {
             e.preventDefault();
             dropArea.classList.remove('border-blue-500');
@@ -73,72 +80,182 @@
                 reader.onload = (e) => {
                     const img = new Image();
                     img.onload = () => {
-                        resizeAndDisplayImage(img);
-                        previewImage.classList.remove('hidden');
+                        originalImage = img;
+                        initializeCanvas();
+                        resetCrop();
+                        imageCanvas.classList.remove('hidden');
+                        cropOverlay.classList.remove('hidden');
                         controls.classList.remove('hidden');
                         downloadBtn.classList.remove('hidden');
-                        initializeCanvas(img);
+                        resetCropBtn.classList.remove('hidden');
                     };
                     img.src = e.target.result;
-                    originalImage = img;
                 };
                 reader.readAsDataURL(file);
             }
         }
 
-        function resizeAndDisplayImage(img) {
+        function initializeCanvas() {
             const maxWidth = 300;
-            const scaleFactor = maxWidth / img.width;
-            const newWidth = maxWidth;
-            const newHeight = img.height * scaleFactor;
-
-            previewImage.style.width = `${newWidth}px`;
-            previewImage.style.height = `${newHeight}px`;
-            previewImage.src = img.src;
-
-            applyCSSFilter();
-        }
-
-        function initializeCanvas(img) {
-            imageCanvas = document.createElement('canvas');
-            imageCanvas.width = img.width;
-            imageCanvas.height = img.height;
+            const scaleFactor = maxWidth / originalImage.width;
+            imageCanvas.width = maxWidth;
+            imageCanvas.height = originalImage.height * scaleFactor;
             imageCtx = imageCanvas.getContext('2d');
-            imageCtx.drawImage(img, 0, 0);
+            scale = scaleFactor;
+            drawImage();
         }
+
+        function drawImage() {
+            imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
+            imageCtx.save();
+            imageCtx.translate(offsetX, offsetY);
+            imageCtx.scale(scale, scale);
+            imageCtx.filter = `grayscale(100%) brightness(${brightnessSlider.value}%) contrast(${contrastSlider.value}%)`;
+            imageCtx.drawImage(originalImage, 0, 0);
+            imageCtx.restore();
+            updateCropOverlay();
+        }
+
+        function updateCropOverlay() {
+            cropOverlay.style.left = `${cropX}px`;
+            cropOverlay.style.top = `${cropY}px`;
+            cropOverlay.style.width = `${cropWidth}px`;
+            cropOverlay.style.height = `${cropHeight}px`;
+        }
+
+        function resetCrop() {
+            scale = imageCanvas.width / originalImage.width;
+            offsetX = 0;
+            offsetY = 0;
+            cropX = 0;
+            cropY = 0;
+            cropWidth = imageCanvas.width;
+            cropHeight = imageCanvas.height;
+            drawImage();
+        }
+
+        imageCanvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = imageCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            
+            scale *= delta;
+            offsetX = mouseX - (mouseX - offsetX) * delta;
+            offsetY = mouseY - (mouseY - offsetY) * delta;
+            
+            drawImage();
+        });
+
+        imageCanvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - offsetX;
+            startY = e.clientY - offsetY;
+        });
+
+        imageCanvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                offsetX = e.clientX - startX;
+                offsetY = e.clientY - startY;
+                drawImage();
+            }
+        });
+
+        imageCanvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        imageCanvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+        });
 
         brightnessSlider.addEventListener('input', () => {
             brightnessValue.textContent = `${brightnessSlider.value}%`;
-            applyCSSFilter();
+            drawImage();
         });
 
         contrastSlider.addEventListener('input', () => {
             contrastValue.textContent = `${contrastSlider.value}%`;
-            applyCSSFilter();
+            drawImage();
         });
 
-        function applyCSSFilter() {
-            const brightness = brightnessSlider.value;
-            const contrast = contrastSlider.value;
-
-            previewImage.style.filter = `grayscale(100%) brightness(${brightness}%) contrast(${contrast}%)`;
-        }
+        resetCropBtn.addEventListener('click', resetCrop);
 
         downloadBtn.addEventListener('click', () => {
-            applyCanvasFilter();
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = cropWidth / scale;
+            cropCanvas.height = cropHeight / scale;
+            const cropCtx = cropCanvas.getContext('2d');
+            cropCtx.filter = `grayscale(100%) brightness(${brightnessSlider.value}%) contrast(${contrastSlider.value}%)`;
+            cropCtx.drawImage(
+                originalImage,
+                (cropX - offsetX) / scale,
+                (cropY - offsetY) / scale,
+                cropWidth / scale,
+                cropHeight / scale,
+                0, 0, cropWidth / scale, cropHeight / scale
+            );
             const link = document.createElement('a');
             link.download = 'black-and-white-image.png';
-            link.href = imageCanvas.toDataURL();
+            link.href = cropCanvas.toDataURL();
             link.click();
         });
 
-        function applyCanvasFilter() {
-            const brightness = brightnessSlider.value;
-            const contrast = contrastSlider.value;
+        // Hot corners for cropping
+        let isResizing = false;
+        let resizeHandle = '';
 
-            imageCtx.filter = `grayscale(100%) brightness(${brightness}%) contrast(${contrast}%)`;
-            imageCtx.drawImage(originalImage, 0, 0);
+        function createResizeHandle(position) {
+            const handle = document.createElement('div');
+            handle.className = `absolute w-3 h-3 bg-white border border-gray-500 ${position}`;
+            cropOverlay.appendChild(handle);
+            
+            handle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                isResizing = true;
+                resizeHandle = position;
+            });
         }
+
+        createResizeHandle('top-0 left-0 cursor-nwse-resize');
+        createResizeHandle('top-0 right-0 cursor-nesw-resize');
+        createResizeHandle('bottom-0 left-0 cursor-nesw-resize');
+        createResizeHandle('bottom-0 right-0 cursor-nwse-resize');
+
+        document.addEventListener('mousemove', (e) => {
+            if (isResizing) {
+                const rect = imageCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                if (resizeHandle.includes('left')) {
+                    const newWidth = cropX + cropWidth - mouseX;
+                    if (newWidth > 20) {
+                        cropWidth = newWidth;
+                        cropX = mouseX;
+                    }
+                } else if (resizeHandle.includes('right')) {
+                    cropWidth = mouseX - cropX;
+                }
+
+                if (resizeHandle.includes('top')) {
+                    const newHeight = cropY + cropHeight - mouseY;
+                    if (newHeight > 20) {
+                        cropHeight = newHeight;
+                        cropY = mouseY;
+                    }
+                } else if (resizeHandle.includes('bottom')) {
+                    cropHeight = mouseY - cropY;
+                }
+
+                updateCropOverlay();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isResizing = false;
+        });
     </script>
 
 </body>
