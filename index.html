@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to Black and White Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
+        <h2 class="text-2xl font-bold mb-4 text-center">Image to Black and White Converter</h2>
+        
+        <div class="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center" id="drop-area">
+            <p class="text-gray-500">Drop an image here or click to upload</p>
+            <input type="file" id="file-input" class="hidden">
+        </div>
+
+        <div class="mt-4">
+            <img id="preview-image" class="hidden max-w-full rounded-lg" alt="Uploaded Image">
+        </div>
+
+        <div id="controls" class="mt-4 hidden">
+            <label class="block text-gray-700">Brightness: <span id="brightness-value">100%</span></label>
+            <input type="range" id="brightness-slider" min="0" max="200" value="100" class="w-full mb-4">
+            
+            <label class="block text-gray-700">Contrast: <span id="contrast-value">100%</span></label>
+            <input type="range" id="contrast-slider" min="0" max="500" value="100" class="w-full">
+        </div>
+
+        <button id="download-btn" class="hidden mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg">Download Image</button>
+    </div>
+
+    <script>
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-input');
+        const previewImage = document.getElementById('preview-image');
+        const controls = document.getElementById('controls');
+        const brightnessSlider = document.getElementById('brightness-slider');
+        const brightnessValue = document.getElementById('brightness-value');
+        const contrastSlider = document.getElementById('contrast-slider');
+        const contrastValue = document.getElementById('contrast-value');
+        const downloadBtn = document.getElementById('download-btn');
+        let originalImage;
+        let imageCanvas;
+        let imageCtx;
+
+        dropArea.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', handleFile);
+
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('border-blue-500');
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('border-blue-500');
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('border-blue-500');
+            handleFile(e.dataTransfer);
+        });
+
+        function handleFile(input) {
+            const file = input.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        resizeAndDisplayImage(img);
+                        previewImage.classList.remove('hidden');
+                        controls.classList.remove('hidden');
+                        downloadBtn.classList.remove('hidden');
+                        initializeCanvas(img);
+                    };
+                    img.src = e.target.result;
+                    originalImage = img;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function resizeAndDisplayImage(img) {
+            const maxWidth = 300;
+            const scaleFactor = maxWidth / img.width;
+            const newWidth = maxWidth;
+            const newHeight = img.height * scaleFactor;
+
+            previewImage.style.width = `${newWidth}px`;
+            previewImage.style.height = `${newHeight}px`;
+            previewImage.src = img.src;
+
+            applyCSSFilter();
+        }
+
+        function initializeCanvas(img) {
+            imageCanvas = document.createElement('canvas');
+            imageCanvas.width = img.width;
+            imageCanvas.height = img.height;
+            imageCtx = imageCanvas.getContext('2d');
+            imageCtx.drawImage(img, 0, 0);
+        }
+
+        brightnessSlider.addEventListener('input', () => {
+            brightnessValue.textContent = `${brightnessSlider.value}%`;
+            applyCSSFilter();
+        });
+
+        contrastSlider.addEventListener('input', () => {
+            contrastValue.textContent = `${contrastSlider.value}%`;
+            applyCSSFilter();
+        });
+
+        function applyCSSFilter() {
+            const brightness = brightnessSlider.value;
+            const contrast = contrastSlider.value;
+
+            previewImage.style.filter = `grayscale(100%) brightness(${brightness}%) contrast(${contrast}%)`;
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            applyCanvasFilter();
+            const link = document.createElement('a');
+            link.download = 'black-and-white-image.png';
+            link.href = imageCanvas.toDataURL();
+            link.click();
+        });
+
+        function applyCanvasFilter() {
+            const brightness = brightnessSlider.value;
+            const contrast = contrastSlider.value;
+
+            imageCtx.filter = `grayscale(100%) brightness(${brightness}%) contrast(${contrast}%)`;
+            imageCtx.drawImage(originalImage, 0, 0);
+        }
+    </script>
+
+</body>
+
+</html>
