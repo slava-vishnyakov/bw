@@ -216,6 +216,7 @@
                 e.stopPropagation();
                 isResizing = true;
                 resizeHandle = position;
+                storeOriginalState();
             });
         }
 
@@ -225,6 +226,17 @@
         createResizeHandle('bottom-0 right-0 cursor-nwse-resize');
 
         let originalCropX, originalCropY, originalCropWidth, originalCropHeight;
+        let originalScale, originalOffsetX, originalOffsetY;
+
+        function storeOriginalState() {
+            originalCropX = cropX;
+            originalCropY = cropY;
+            originalCropWidth = cropWidth;
+            originalCropHeight = cropHeight;
+            originalScale = scale;
+            originalOffsetX = offsetX;
+            originalOffsetY = offsetY;
+        }
 
         document.addEventListener('mousemove', (e) => {
             if (isResizing) {
@@ -233,26 +245,27 @@
                 const mouseY = e.clientY - rect.top;
 
                 if (resizeHandle.includes('left')) {
-                    const newWidth = cropX + cropWidth - mouseX;
+                    const newWidth = originalCropX + originalCropWidth - mouseX;
                     if (newWidth > 20) {
                         cropWidth = newWidth;
                         cropX = mouseX;
                     }
                 } else if (resizeHandle.includes('right')) {
-                    cropWidth = mouseX - cropX;
+                    cropWidth = mouseX - originalCropX;
                 }
 
                 if (resizeHandle.includes('top')) {
-                    const newHeight = cropY + cropHeight - mouseY;
+                    const newHeight = originalCropY + originalCropHeight - mouseY;
                     if (newHeight > 20) {
                         cropHeight = newHeight;
                         cropY = mouseY;
                     }
                 } else if (resizeHandle.includes('bottom')) {
-                    cropHeight = mouseY - cropY;
+                    cropHeight = mouseY - originalCropY;
                 }
 
                 updateCropOverlay();
+                drawImage();
             }
         });
 
@@ -269,13 +282,12 @@
 
             if (cropAspectRatio > canvasAspectRatio) {
                 scale = imageCanvas.width / cropWidth;
-                offsetX = -cropX * scale;
-                offsetY = (imageCanvas.height - cropHeight * scale) / 2 - cropY * scale;
             } else {
                 scale = imageCanvas.height / cropHeight;
-                offsetX = (imageCanvas.width - cropWidth * scale) / 2 - cropX * scale;
-                offsetY = -cropY * scale;
             }
+
+            offsetX = (imageCanvas.width - cropWidth * scale) / 2 - cropX * scale;
+            offsetY = (imageCanvas.height - cropHeight * scale) / 2 - cropY * scale;
 
             drawImage();
         }
